@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>VectorOps — Cluster Intelligence</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.25.6/babel.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0e14;
+    --panel: #10151f;
+    --panel-border: #1e2635;
+    --grid-line: #161c28;
+    --text-primary: #e8ecf3;
+    --text-dim: #6b7688;
+    --accent-cool: #3ecfb2;   /* healthy / cluster B tone */
+    --accent-warn: #f0a83c;   /* warning */
+    --accent-hot: #ef4a5f;    /* unsafe / cluster A tone */
+    --accent-blue: #4f8dfd;
+    --mono: 'IBM Plex Mono', 'SFMono-Regular', Menlo, monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(circle at 15% 0%, rgba(79,141,253,0.06), transparent 40%),
+      radial-gradient(circle at 85% 100%, rgba(62,207,178,0.05), transparent 40%),
+      var(--bg);
+    color: var(--text-primary);
+    font-family: var(--sans);
+    min-height: 100vh;
+  }
+  .mono { font-family: var(--mono); }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #253044; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useCallback } = React;
+
+const API = "http://localhost:8000";
+
+function useInterval(callback, delay) {
+  const savedRef = useRef(callback);
+  useEffect(() => { savedRef.current = callback; }, [callback]);
+  useEffect(() => {
+    if (delay === null) return;
+    const id = setInterval(() => savedRef.current(), delay);
+    return () => clearInterval(id);
+  }, [delay]);
+}
+
+function statusColor(status) {
+  if (status === "unsafe") return "var(--accent-hot)";
+  if (status === "warning") return "var(--accent-warn)";
+  return "var(--accent-cool)";
+}
+
+function Gauge({ label, value, max, unit, color, size = 92 }) {
+  const pct = Math.min(1, value / max);
+  const r = (size - 12) / 2;
+  const circumference = 2 * Math.PI * r;
+  const offset = circumference * (1 - pct);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+        <circle cx={size/2} cy={size/2} r={r} stroke="var(--grid-line)" strokeWidth="7" fill="none" />
+        <circle
+          cx={size/2} cy={size/2} r={r} stroke={color} strokeWidth="7" fill="none"
+          strokeDasharray={circumference} strokeDashoffset={offset}
+          strokeLinecap="round"
+          style={{ transition: "stroke-dashoffset 1.4s cubic-bezier(.4,0,.2,1), stroke 0.6s" }}
+        />
+      </svg>
+      <div style={{ marginTop: -size + size/2 - 6, fontFamily: "var(--mono)", fontSize: 15, fontWeight: 600 }}>
+        {Math.round(value)}{unit}
+      </div>
+      <div style={{ fontSize: 10, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", marginTop: 10 }}>
+        {label}
+      </div>
+    </div>
+  );
+}
+
+function NodeCard({ node }) {
+  const color = statusColor(node.status);
+  return (
+    <div style={{
+      background: "var(--panel)", border: `1px solid ${node.status === 'unsafe' ? color : 'var(--panel-border)'}`,
+      borderRadius: 10, padding: "14px 12px", minWidth: 150,
+      boxShadow: node.status === "unsafe" ? `0 0 0 1px ${color}33, 0 0 20px ${color}22` : "none",
+      transition: "border-color 0.6s, box-shadow 0.6s"
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <span className="mono" style={{ fontSize: 13, fontWeight: 600 }}>{node.node_id}</span>
+        <span style={{
+          fontSize: 9, padding: "2px 6px", borderRadius: 4, textTransform: "uppercase",
+          background: `${color}22`, color: color, letterSpacing: "0.05em", fontWeight: 600
+        }}>{node.status}</span>
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-around" }}>
+        <Gauge label="VRAM" value={node.vram_util_pct} max={100} unit="%" color="var(--accent-blue)" size={72} />
+        <Gauge label="Temp" value={node.temp_c} max={100} unit="°" color={color} size={72} />
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, fontSize: 10.5, color: "var(--text-dim)" }} className="mono">
+        <span>util {node.gpu_core_util_pct}%</span>
+        <span>{node.active_jobs} jobs</span>
+      </div>
+      {node.fail_risk_pct != null && (
+        <div style={{ marginTop: 6, fontSize: 10, color: node.fail_risk_pct > 50 ? "var(--accent-hot)" : "var(--text-dim)" }} className="mono">
+          fail risk {node.fail_risk_pct}% · ETA {node.minutes_to_bottleneck}m
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ClusterPanel({ title, nodes, accent, onChaos }) {
+  const avgTemp = nodes.length ? (nodes.reduce((a,n)=>a+n.temp_c,0)/nodes.length).toFixed(1) : "--";
+  const avgVram = nodes.length ? (nodes.reduce((a,n)=>a+n.vram_util_pct,0)/nodes.length).toFixed(0) : "--";
+  const unsafeCount = nodes.filter(n => n.status === "unsafe").length;
+  return (
+    <div style={{ background: "var(--panel)", border: "1px solid var(--panel-border)", borderRadius: 14, padding: 18, flex: 1, minWidth: 380 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>{title}</h2>
+          <div className="mono" style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>
+            avg {avgTemp}°C · {avgVram}% VRAM · {unsafeCount} unsafe node{unsafeCount !== 1 ? "s" : ""}
+          </div>
+        </div>
+        <button onClick={onChaos} style={{
+          background: "transparent", border: `1px solid ${accent}55`, color: accent,
+          borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", fontWeight: 600, letterSpacing: "0.03em"
+        }}>⚡ Inject Chaos</button>
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+        {nodes.map(n => <NodeCard key={n.node_id} node={n} />)}
+      </div>
+    </div>
+  );
+}
+
+function DecisionLog({ decisions }) {
+  return (
+    <div style={{ background: "var(--panel)", border: "1px solid var(--panel-border)", borderRadius: 14, padding: 18 }}>
+      <h2 style={{ margin: "0 0 12px 0", fontSize: 15, fontWeight: 700 }}>Scheduler Decision Log</h2>
+      <div style={{ maxHeight: 220, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+        {decisions.length === 0 && <div style={{ color: "var(--text-dim)", fontSize: 12 }}>No decisions yet — trigger a job schedule to see reasoning here.</div>}
+        {[...decisions].reverse().map((d, i) => (
+          <div key={i} style={{ borderLeft: `2px solid ${d.migrated ? "var(--accent-hot)" : "var(--accent-cool)"}`, paddingLeft: 10, fontSize: 12 }}>
+            <div className="mono" style={{ color: "var(--text-primary)", fontWeight: 600 }}>
+              {d.job_id} {d.migrated ? `→ ${d.to_node}` : `stayed on ${d.to_node}`}
+            </div>
+            <div style={{ color: "var(--text-dim)", marginTop: 2 }}>{d.reason}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CostPanel({ cost }) {
+  if (!cost) return null;
+  return (
+    <div style={{ background: "var(--panel)", border: "1px solid var(--panel-border)", borderRadius: 14, padding: 18 }}>
+      <h2 style={{ margin: "0 0 12px 0", fontSize: 15, fontWeight: 700 }}>Cost Optimizer</h2>
+      <div style={{ display: "flex", gap: 22, marginBottom: 10 }}>
+        <div>
+          <div className="mono" style={{ fontSize: 22, fontWeight: 700, color: "var(--accent-warn)" }}>
+            {cost.idle_node_count}/{cost.total_nodes}
+          </div>
+          <div style={{ fontSize: 10, color: "var(--text-dim)", textTransform: "uppercase" }}>Idle GPUs</div>
+        </div>
+        <div>
+          <div className="mono" style={{ fontSize: 22, fontWeight: 700, color: "var(--accent-hot)" }}>
+            ${cost.total_cloud_opportunity_cost_usd}/hr
+          </div>
+          <div style={{ fontSize: 10, color: "var(--text-dim)", textTransform: "uppercase" }}>Cloud-equiv. wasted</div>
+        </div>
+      </div>
+      <div style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.5 }}>{cost.headline}</div>
+    </div>
+  );
+}
+
+function CopilotPanel() {
+  const [messages, setMessages] = useState([
+    { role: "assistant", text: "Ask me why a node is flagged, or why a job migrated." }
+  ]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const send = async () => {
+    if (!input.trim()) return;
+    const q = input.trim();
+    setMessages(m => [...m, { role: "user", text: q }]);
+    setInput("");
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/copilot/ask`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: q })
+      });
+      const data = await res.json();
+      setMessages(m => [...m, { role: "assistant", text: data.answer, source: data.source }]);
+    } catch (e) {
+      setMessages(m => [...m, { role: "assistant", text: "Backend unreachable — is FastAPI running on :8000?" }]);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ background: "var(--panel)", border: "1px solid var(--panel-border)", borderRadius: 14, padding: 18, display: "flex", flexDirection: "column", height: 360 }}>
+      <h2 style={{ margin: "0 0 12px 0", fontSize: 15, fontWeight: 700 }}>AI Cluster Copilot</h2>
+      <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10, marginBottom: 10 }}>
+        {messages.map((m, i) => (
+          <div key={i} style={{
+            alignSelf: m.role === "user" ? "flex-end" : "flex-start",
+            background: m.role === "user" ? "var(--accent-blue)22" : "var(--grid-line)",
+            borderRadius: 8, padding: "8px 11px", fontSize: 12.5, maxWidth: "88%", lineHeight: 1.45
+          }}>
+            {m.text}
+          </div>
+        ))}
+        {loading && <div style={{ fontSize: 11, color: "var(--text-dim)" }}>thinking…</div>}
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <input
+          value={input} onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && send()}
+          placeholder="Why is A-01 flagged?"
+          style={{
+            flex: 1, background: "var(--bg)", border: "1px solid var(--panel-border)", borderRadius: 6,
+            padding: "8px 10px", color: "var(--text-primary)", fontSize: 12.5, outline: "none"
+          }}
+        />
+        <button onClick={send} style={{
+          background: "var(--accent-blue)", border: "none", borderRadius: 6, padding: "8px 14px",
+          color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer"
+        }}>Ask</button>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [nodes, setNodes] = useState([]);
+  const [decisions, setDecisions] = useState([]);
+  const [cost, setCost] = useState(null);
+  const [connected, setConnected] = useState(true);
+  const [tick, setTick] = useState(0);
+
+  const refresh = useCallback(async () => {
+    try {
+      const [nRes, dRes, cRes] = await Promise.all([
+        fetch(`${API}/nodes`), fetch(`${API}/decisions`), fetch(`${API}/cost`)
+      ]);
+      setNodes(await nRes.json());
+      setDecisions(await dRes.json());
+      setCost(await cRes.json());
+      setConnected(true);
+      setTick(t => t + 1);
+    } catch (e) {
+      setConnected(false);
+    }
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+  useInterval(refresh, 2000);
+
+  const clusterA = nodes.filter(n => n.cluster === "A");
+  const clusterB = nodes.filter(n => n.cluster === "B");
+
+  const triggerChaos = async (cluster) => {
+    await fetch(`${API}/chaos`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cluster, intensity: 1.0 })
+    });
+  };
+
+  const scheduleDemoJob = async () => {
+    const hottest = [...nodes].sort((a,b) => b.temp_c - a.temp_c)[0];
+    if (!hottest) return;
+    await fetch(`${API}/schedule`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_vram_gb: 6, current_node_id: hottest.node_id, job_id: `demo-job-${Date.now().toString().slice(-4)}` })
+    });
+    refresh();
+  };
+
+  return (
+    <div style={{ maxWidth: 1360, margin: "0 auto", padding: "26px 28px 60px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em" }}>
+            Vector<span style={{ color: "var(--accent-blue)" }}>Ops</span>
+          </h1>
+          <div className="mono" style={{ fontSize: 11.5, color: "var(--text-dim)", marginTop: 2 }}>
+            decentralized cluster intelligence · {connected ? `live · tick ${tick}` : "disconnected"}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={scheduleDemoJob} style={{
+            background: "var(--accent-cool)", border: "none", borderRadius: 7, padding: "9px 16px",
+            color: "#06231c", fontSize: 12.5, fontWeight: 700, cursor: "pointer"
+          }}>▶ Schedule Job (hottest node)</button>
+        </div>
+      </div>
+
+      {!connected && (
+        <div style={{ background: "#3a1420", border: "1px solid var(--accent-hot)", color: "var(--accent-hot)", padding: 12, borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
+          Can't reach backend at {API}. Run: <span className="mono">uvicorn app.main:app --reload</span> from backend/
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 18, flexWrap: "wrap", marginBottom: 18 }}>
+        <ClusterPanel title="Cluster A — Lab (RTX 4090s)" nodes={clusterA} accent="var(--accent-hot)" onChaos={() => triggerChaos("A")} />
+        <ClusterPanel title="Cluster B — Faculty (RTX 3080s)" nodes={clusterB} accent="var(--accent-cool)" onChaos={() => triggerChaos("B")} />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1.2fr", gap: 18 }}>
+        <CostPanel cost={cost} />
+        <DecisionLog decisions={decisions} />
+        <CopilotPanel />
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
