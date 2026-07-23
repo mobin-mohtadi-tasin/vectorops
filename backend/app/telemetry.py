@@ -77,10 +77,13 @@ class ClusterSimEngine:
                 )
 
     def inject_chaos(self, cluster: str, intensity: float = 1.0):
-        self.chaos[cluster] = max(self.chaos.get(cluster, 0.0), intensity)
+        c_upper = cluster.upper()
+        self.chaos[c_upper] = max(self.chaos.get(c_upper, 0.0), intensity)
+        other = "B" if c_upper == "A" else "A"
+        self.chaos[other] = 0.0
 
     def clear_chaos(self, cluster: str):
-        self.chaos[cluster] = 0.0
+        self.chaos[cluster.upper()] = 0.0
 
     def tick(self):
         """Advance simulated time by one step (~2s of wall clock ~= a few

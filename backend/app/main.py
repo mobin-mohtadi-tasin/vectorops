@@ -119,10 +119,17 @@ def get_cost_report():
 
 @app.post("/chaos")
 def inject_chaos(req: ChaosRequest):
-    if req.cluster.upper() not in ("A", "B"):
+    target = req.cluster.upper()
+    if target not in ("A", "B"):
         raise HTTPException(status_code=400, detail="cluster must be 'A' or 'B'")
-    engine.inject_chaos(req.cluster.upper(), req.intensity)
-    return {"status": "chaos injected", "cluster": req.cluster.upper(), "intensity": req.intensity}
+    other = "B" if target == "A" else "A"
+    engine.inject_chaos(target, req.intensity)
+    return {
+        "status": f"chaos injected into Cluster {target}, cleared from Cluster {other}",
+        "cluster": target,
+        "cleared_cluster": other,
+        "intensity": req.intensity
+    }
 
 
 @app.post("/chaos/clear")
