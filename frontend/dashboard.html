@@ -32,6 +32,16 @@
     --accent-amber-bg: #fffbeb;
     --accent-blue: #2563eb;
     --accent-blue-bg: #eff6ff;
+
+    --brand-emerald: #059669;
+    --brand-emerald-bg: #ecfdf5;
+    --brand-rose: #e11d48;
+    --brand-rose-bg: #fff1f2;
+    --brand-amber: #d97706;
+    --brand-amber-bg: #fffbeb;
+    --brand-blue: #2563eb;
+    --brand-blue-bg: #eff6ff;
+    --brand-dark: #0f172a;
     
     --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
     --font-mono: 'IBM Plex Mono', monospace;
@@ -337,6 +347,30 @@
     margin-top: 4px;
   }
 
+  /* Line Progress Bar Components */
+  .progress-segment {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .progress-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .progress-bar-bg {
+    height: 8px;
+    background: #f4f4f5;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.6s ease;
+  }
+
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-thumb { background: #d4d4d8; border-radius: 4px; }
 </style>
@@ -370,14 +404,25 @@ const Icons = {
   Feedback: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="22" x2="11" y1="2" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>,
 };
 
-/* --- TAB 1: HOME & DASHBOARD --- */
+/* --- TAB 1: HOME & DASHBOARD (GPU CLUSTERS FOCUS) --- */
 function HomeTab({ nodes, decisions, cost, refresh }) {
   const clusterA = nodes.filter(n => n.cluster === "A");
   const clusterB = nodes.filter(n => n.cluster === "B");
-  const onlineCount = nodes.length || 12;
-  const totalVram = nodes.reduce((a, n) => a + n.vram_total_gb, 0) || 204.0;
-  const usedVram = nodes.reduce((a, n) => a + n.vram_used_gb, 0);
-  const avgUtil = nodes.length ? (nodes.reduce((a, n) => a + n.gpu_core_util_pct, 0) / nodes.length).toFixed(1) : "74.5";
+
+  // Cluster A Specs & Traffic
+  const vramA_used = clusterA.reduce((a, n) => a + n.vram_used_gb, 0);
+  const vramA_total = clusterA.reduce((a, n) => a + n.vram_total_gb, 0) || 144.0;
+  const utilA = clusterA.length ? (clusterA.reduce((a, n) => a + n.gpu_core_util_pct, 0) / clusterA.length).toFixed(1) : "82.4";
+  const cudaCoresA = clusterA.length * 16384; // 6 x 16,384 for RTX 4090
+
+  // Cluster B Specs & Traffic
+  const vramB_used = clusterB.reduce((a, n) => a + n.vram_used_gb, 0);
+  const vramB_total = clusterB.reduce((a, n) => a + n.vram_total_gb, 0) || 60.0;
+  const utilB = clusterB.length ? (clusterB.reduce((a, n) => a + n.gpu_core_util_pct, 0) / clusterB.length).toFixed(1) : "24.1";
+  const cudaCoresB = clusterB.length * 8704;  // 6 x 8,704 for RTX 3080
+
+  const totalCudaCores = cudaCoresA + cudaCoresB;
+  const totalVramGB = vramA_total + vramB_total;
 
   const triggerChaos = async (cluster) => {
     await fetch(`${API}/chaos`, {
@@ -399,93 +444,243 @@ function HomeTab({ nodes, decisions, cost, refresh }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* CTA Card */}
-      <div className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--text-heading)" }}>Contribute this desktop to model training</h3>
-          <div style={{ fontSize: 12.5, color: "var(--text-muted)", marginTop: 2 }}>When you opt-in, your hardware powers up VectorOps Machine Learning Model training process. You can opt out anytime.</div>
-        </div>
-        <button onClick={scheduleDemoJob} className="btn-black">Opt In / Run Job</button>
-      </div>
-
-      {/* Training Progress Card */}
-      <div className="card">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em" }}>MODEL TRAINING PROGRESS</span>
-          <span className="mono" style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>8H 8M REMAINING</span>
-        </div>
-        <div className="mono" style={{ fontSize: 32, fontWeight: 800, color: "var(--text-heading)", margin: "8px 0" }}>
-          {avgUtil}%
-        </div>
-        <div style={{ height: 8, background: "#f4f4f5", borderRadius: 4, overflow: "hidden" }}>
-          <div style={{ width: `${avgUtil}%`, height: "100%", background: "var(--pill-black)", transition: "width 0.8s ease" }} />
-        </div>
-        <div className="mono" style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 8 }}>
-          vectorops_robot_pretrain_1m_foundation_20260622_v9_adamw_signed_env.train
-        </div>
-      </div>
-
-      {/* 4 Summary Stats */}
+      {/* 4 Cluster Overview Stat Cards */}
       <div className="stats-grid">
         <div className="stat-card">
-          <div className="stat-label">ONLINE NODES</div>
-          <div className="stat-value">{onlineCount} online</div>
+          <div className="stat-label">ONLINE GPU CLUSTERS</div>
+          <div className="stat-value">2 Clusters ({nodes.length} Nodes)</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">COMBINED GPU RAM</div>
-          <div className="stat-value">{totalVram.toFixed(1)} GB</div>
+          <div className="stat-label">TOTAL CUDA CORES</div>
+          <div className="stat-value">{totalCudaCores.toLocaleString()} Cores</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">ACTIVE VRAM USAGE</div>
-          <div className="stat-value">{usedVram.toFixed(1)} GB</div>
+          <div className="stat-label">COMBINED VRAM CAPACITY</div>
+          <div className="stat-value">{totalVramGB.toFixed(1)} GB Total</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">CPU THREADS</div>
-          <div className="stat-value">192 threads</div>
+          <div className="stat-label">ENERGY COST</div>
+          <div className="stat-value">${cost ? cost.total_wasted_electricity_usd : "0.00"} / hr</div>
         </div>
+      </div>
+
+      {/* Cluster A & Cluster B Panels */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+        
+        {/* Cluster A: Lab Cluster (BUSY / HIGH TRAFFIC) */}
+        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--text-heading)" }}>Cluster A — Lab Cluster</h3>
+                <span className="badge-danger">HIGH TRAFFIC</span>
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>6x NVIDIA GeForce RTX 4090 Nodes</div>
+            </div>
+            <button onClick={() => triggerChaos("A")} className="btn-soft" style={{ fontSize: 11.5 }}>⚡ Inject Chaos</button>
+          </div>
+
+          {/* Cluster A Line Progress Bars */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, background: "#fafafa", padding: 14, borderRadius: 10, border: "1px solid var(--border-card)" }}>
+            
+            {/* VRAM Segment */}
+            <div className="progress-segment">
+              <div className="progress-header">
+                <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>VRAM Allocation</span>
+                <span className="mono" style={{ color: "#2563eb", fontWeight: 700 }}>
+                  {vramA_used.toFixed(1)} / {vramA_total.toFixed(1)} GB ({Math.round((vramA_used/vramA_total)*100)}%)
+                </span>
+              </div>
+              <div className="progress-bar-bg" style={{ height: 10, background: "#e2e8f0", borderRadius: 5, overflow: "hidden" }}>
+                <div className="progress-bar-fill" style={{ width: `${Math.max(4, Math.min(100, (vramA_used/vramA_total)*100))}%`, height: "100%", background: "#2563eb", borderRadius: 5, transition: "width 0.6s ease" }} />
+              </div>
+            </div>
+
+            {/* GPU Core Load Segment */}
+            <div className="progress-segment">
+              <div className="progress-header">
+                <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>GPU Core Traffic Load</span>
+                <span className="mono" style={{ color: utilA > 75 ? "#e11d48" : "#059669", fontWeight: 700 }}>{utilA}% Load</span>
+              </div>
+              <div className="progress-bar-bg" style={{ height: 10, background: "#e2e8f0", borderRadius: 5, overflow: "hidden" }}>
+                <div className="progress-bar-fill" style={{ width: `${utilA}%`, height: "100%", background: utilA > 75 ? "#e11d48" : "#059669", borderRadius: 5, transition: "width 0.6s ease" }} />
+              </div>
+            </div>
+
+            {/* CUDA Cores Segment */}
+            <div className="progress-segment">
+              <div className="progress-header">
+                <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>CUDA Cores Active</span>
+                <span className="mono" style={{ color: "var(--text-heading)", fontWeight: 700 }}>98,304 / 98,304 Cores</span>
+              </div>
+              <div className="progress-bar-bg" style={{ height: 10, background: "#e2e8f0", borderRadius: 5, overflow: "hidden" }}>
+                <div className="progress-bar-fill" style={{ width: "100%", height: "100%", background: "#09090b", borderRadius: 5 }} />
+              </div>
+            </div>
+
+          </div>
+
+          {/* Nodes Breakdown Grid */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            {clusterA.map(n => {
+              const vramPct = Math.round((n.vram_used_gb / n.vram_total_gb) * 100);
+              return (
+                <div key={n.node_id} style={{ background: "#ffffff", border: "1px solid var(--border-card)", borderRadius: 8, padding: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span className="mono" style={{ fontWeight: 700, fontSize: 12 }}>{n.node_id}</span>
+                    <span className={n.status === "unsafe" ? "badge-danger" : n.status === "warning" ? "badge-warning" : "badge-ready"}>{n.status.toUpperCase()}</span>
+                  </div>
+                  
+                  {/* Node Mini VRAM Line Bar */}
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: "var(--text-muted)", marginBottom: 2 }} className="mono">
+                      <span>VRAM Allocation</span>
+                      <span style={{ color: "#2563eb", fontWeight: 700 }}>{n.vram_used_gb}/{n.vram_total_gb} GB</span>
+                    </div>
+                    <div style={{ height: 6, background: "#f4f4f5", borderRadius: 3, overflow: "hidden" }}>
+                      <div style={{ width: `${Math.max(4, vramPct)}%`, height: "100%", background: "#2563eb", borderRadius: 3 }} />
+                    </div>
+                  </div>
+
+                  <div style={{ fontSize: 10.5, color: "var(--text-muted)" }} className="mono">Util: {n.gpu_core_util_pct}% · {n.temp_c}°C</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Cluster B: Faculty Cluster (LIGHT TRAFFIC / IDLE) */}
+        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--text-heading)" }}>Cluster B — Faculty Cluster</h3>
+                <span className="badge-ready">LIGHT TRAFFIC</span>
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>6x NVIDIA GeForce RTX 3080 Nodes</div>
+            </div>
+            <button onClick={() => triggerChaos("B")} className="btn-soft" style={{ fontSize: 11.5 }}>⚡ Inject Chaos</button>
+          </div>
+
+          {/* Cluster B Line Progress Bars */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, background: "#fafafa", padding: 14, borderRadius: 10, border: "1px solid var(--border-card)" }}>
+            
+            {/* VRAM Segment */}
+            <div className="progress-segment">
+              <div className="progress-header">
+                <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>VRAM Allocation</span>
+                <span className="mono" style={{ color: "#2563eb", fontWeight: 700 }}>
+                  {vramB_used.toFixed(1)} / {vramB_total.toFixed(1)} GB ({Math.round((vramB_used/vramB_total)*100)}%)
+                </span>
+              </div>
+              <div className="progress-bar-bg" style={{ height: 10, background: "#e2e8f0", borderRadius: 5, overflow: "hidden" }}>
+                <div className="progress-bar-fill" style={{ width: `${Math.max(4, Math.min(100, (vramB_used/vramB_total)*100))}%`, height: "100%", background: "#2563eb", borderRadius: 5, transition: "width 0.6s ease" }} />
+              </div>
+            </div>
+
+            {/* GPU Core Load Segment */}
+            <div className="progress-segment">
+              <div className="progress-header">
+                <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>GPU Core Traffic Load</span>
+                <span className="mono" style={{ color: "#059669", fontWeight: 700 }}>{utilB}% Load</span>
+              </div>
+              <div className="progress-bar-bg" style={{ height: 10, background: "#e2e8f0", borderRadius: 5, overflow: "hidden" }}>
+                <div className="progress-bar-fill" style={{ width: `${utilB}%`, height: "100%", background: "#059669", borderRadius: 5, transition: "width 0.6s ease" }} />
+              </div>
+            </div>
+
+            {/* CUDA Cores Segment */}
+            <div className="progress-segment">
+              <div className="progress-header">
+                <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>CUDA Cores Active</span>
+                <span className="mono" style={{ color: "var(--text-heading)", fontWeight: 700 }}>52,224 / 52,224 Cores</span>
+              </div>
+              <div className="progress-bar-bg" style={{ height: 10, background: "#e2e8f0", borderRadius: 5, overflow: "hidden" }}>
+                <div className="progress-bar-fill" style={{ width: "100%", height: "100%", background: "#09090b", borderRadius: 5 }} />
+              </div>
+            </div>
+
+          </div>
+
+          {/* Nodes Breakdown Grid */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            {clusterB.map(n => {
+              const vramPct = Math.round((n.vram_used_gb / n.vram_total_gb) * 100);
+              return (
+                <div key={n.node_id} style={{ background: "#ffffff", border: "1px solid var(--border-card)", borderRadius: 8, padding: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span className="mono" style={{ fontWeight: 700, fontSize: 12 }}>{n.node_id}</span>
+                    <span className={n.status === "unsafe" ? "badge-danger" : n.status === "warning" ? "badge-warning" : "badge-ready"}>{n.status.toUpperCase()}</span>
+                  </div>
+                  
+                  {/* Node Mini VRAM Line Bar */}
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: "var(--text-muted)", marginBottom: 2 }} className="mono">
+                      <span>VRAM Allocation</span>
+                      <span style={{ color: "#2563eb", fontWeight: 700 }}>{n.vram_used_gb}/{n.vram_total_gb} GB</span>
+                    </div>
+                    <div style={{ height: 6, background: "#f4f4f5", borderRadius: 3, overflow: "hidden" }}>
+                      <div style={{ width: `${Math.max(4, vramPct)}%`, height: "100%", background: "#2563eb", borderRadius: 3 }} />
+                    </div>
+                  </div>
+
+                  <div style={{ fontSize: 10.5, color: "var(--text-muted)" }} className="mono">Util: {n.gpu_core_util_pct}% · {n.temp_c}°C</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
       </div>
 
       {/* Split Bottom Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 20 }}>
-        {/* Left: Available Training Nodes */}
+        {/* Scheduler Decision Log */}
         <div className="card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--text-heading)" }}>Available Training Nodes</h3>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => triggerChaos("A")} className="btn-soft">Chaos A</button>
-              <button onClick={() => triggerChaos("B")} className="btn-soft">Chaos B</button>
-            </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--text-heading)" }}>Scheduler Decision Log</h3>
+            <button onClick={scheduleDemoJob} className="btn-black" style={{ padding: "6px 12px", fontSize: 11.5 }}>+ Schedule Demo Job</button>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 360, overflowY: "auto" }}>
-            {nodes.map(n => (
-              <div key={n.node_id} style={{ background: "#fafafa", border: "1px solid var(--border-card)", borderRadius: 10, padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: "var(--text-heading)" }}>Node {n.node_id} (Cluster {n.cluster})</div>
-                  <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 2 }}>{n.gpu_model} · {n.vram_used_gb}/{n.vram_total_gb} GB VRAM · {n.temp_c}°C</div>
-                </div>
-                <span className={n.status === "unsafe" ? "badge-danger" : n.status === "warning" ? "badge-warning" : "badge-ready"}>
-                  {n.status.toUpperCase()}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Right: Event Log */}
-        <div className="card">
-          <h3 style={{ margin: "0 0 16px 0", fontSize: 15, fontWeight: 700, color: "var(--text-heading)" }}>Training Event Log</h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 360, overflowY: "auto" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 220, overflowY: "auto" }}>
             {decisions.length === 0 && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>No scheduling events logged.</div>}
             {[...decisions].reverse().map((d, i) => (
               <div key={i} style={{ background: "#fafafa", border: "1px solid var(--border-card)", borderRadius: 8, padding: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 700 }}>
                   <span>{d.job_id}</span>
-                  <span className="mono" style={{ fontSize: 10, color: "var(--text-muted)" }}>{d.migrated ? "MIGRATED" : "PLACED"}</span>
+                  <span className="mono" style={{ fontSize: 10, color: d.migrated ? "var(--accent-rose)" : "var(--accent-emerald)" }}>
+                    {d.migrated ? `MIGRATED TO ${d.to_node}` : `PLACED ON ${d.to_node}`}
+                  </span>
                 </div>
                 <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 4, lineHeight: 1.4 }}>{d.reason}</div>
               </div>
             ))}
           </div>
+        </div>
+
+        {/* Cost & Energy Optimizer */}
+        <div className="card">
+          <h3 style={{ margin: "0 0 14px 0", fontSize: 15, fontWeight: 700, color: "var(--text-heading)" }}>Cost & Energy Optimizer</h3>
+          {cost && (
+            <div>
+              <div style={{ display: "flex", gap: 20, marginBottom: 12 }}>
+                <div>
+                  <div className="mono" style={{ fontSize: 24, fontWeight: 700, color: "var(--brand-amber)" }}>
+                    {cost.idle_node_count}/{cost.total_nodes}
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600 }}>Idle GPUs</div>
+                </div>
+                <div>
+                  <div className="mono" style={{ fontSize: 24, fontWeight: 700, color: "var(--brand-rose)" }}>
+                    ${cost.total_cloud_opportunity_cost_usd}/hr
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600 }}>Cloud Equiv. Wasted</div>
+                </div>
+              </div>
+              <div style={{ fontSize: 12.5, color: "var(--text-muted)", lineHeight: 1.5, background: "#fafafa", padding: 12, borderRadius: 8, border: "1px solid var(--border-card)" }}>
+                {cost.headline}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -685,38 +880,53 @@ function SupportTab() {
   );
 }
 
-/* --- TAB 5: TRAINING --- */
+/* --- TAB 5: TRAINING (MONOTONIC PROGRESS) --- */
 function TrainingTab({ nodes }) {
+  const [progress, setProgress] = useState(74.54);
+
+  // Monotonic progress advancement: strictly increases over time (never goes backward!)
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setProgress(p => {
+        if (p >= 99.9) return 99.9;
+        return parseFloat((p + 0.04).toFixed(2));
+      });
+    }, 1500);
+    return () => clearInterval(timer);
+  }, []);
+
   const onlineCount = nodes.length || 12;
   const totalVram = nodes.reduce((a, n) => a + n.vram_total_gb, 0) || 204.0;
-  const avgUtil = nodes.length ? (nodes.reduce((a, n) => a + n.gpu_core_util_pct, 0) / nodes.length).toFixed(1) : "74.5";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Opt-In Banner Card */}
       <div className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Contribute this desktop to model training</h3>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--text-heading)" }}>Contribute this desktop to model training</h3>
           <div style={{ fontSize: 12.5, color: "var(--text-muted)", marginTop: 2 }}>When you opt-in, your hardware powers up VectorOps Machine Learning Model training process. You can opt out anytime.</div>
         </div>
         <button className="btn-black">Opt In</button>
       </div>
 
+      {/* Monotonic Model Training Progress Card */}
       <div className="card">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em" }}>MODEL TRAINING PROGRESS</span>
-          <span className="mono" style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>8H 8M</span>
+          <span className="mono" style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>8H 8M REMAINING</span>
         </div>
         <div className="mono" style={{ fontSize: 32, fontWeight: 800, color: "var(--text-heading)", margin: "8px 0" }}>
-          {avgUtil}%
+          {progress}%
         </div>
         <div style={{ height: 8, background: "#f4f4f5", borderRadius: 4, overflow: "hidden" }}>
-          <div style={{ width: `${avgUtil}%`, height: "100%", background: "var(--pill-black)" }} />
+          <div style={{ width: `${progress}%`, height: "100%", background: "var(--pill-black)", transition: "width 0.8s ease" }} />
         </div>
         <div className="mono" style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 8 }}>
           craftly_robot_pretrain_1m_foundation_20260622_v9_adamw_signed_env.craftlytrain
         </div>
       </div>
 
+      {/* 4 Summary Stats */}
       <div className="stats-grid">
         <div className="stat-card">
           <div className="stat-label">ONLINE NODES</div>
@@ -736,6 +946,7 @@ function TrainingTab({ nodes }) {
         </div>
       </div>
 
+      {/* Split Bottom Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 20 }}>
         <div className="card">
           <h3 style={{ margin: "0 0 16px 0", fontSize: 15, fontWeight: 700 }}>Available Training Nodes</h3>
@@ -743,8 +954,8 @@ function TrainingTab({ nodes }) {
             {nodes.map(n => (
               <div key={n.node_id} style={{ background: "#fafafa", border: "1px solid var(--border-card)", borderRadius: 10, padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 13 }}>Node {n.node_id}</div>
-                  <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>{n.gpu_model} - {n.vram_total_gb} GB</div>
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>Node {n.node_id} (Cluster {n.cluster})</div>
+                  <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>{n.gpu_model} - {n.vram_total_gb} GB VRAM</div>
                 </div>
                 <span className="badge-ready">READY</span>
               </div>
@@ -761,7 +972,16 @@ function TrainingTab({ nodes }) {
                 <span style={{ fontSize: 10, color: "var(--text-muted)" }}>6/23/2026</span>
               </div>
               <div className="mono" style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
-                [worker] phase=lineage_cache_lock_wait lock=[redacted_path] lock_age_seconds=264.1
+                [craftly-worker] phase=lineage_cache_lock_wait lock=[redacted_path] lock_age_seconds=264.1
+              </div>
+            </div>
+            <div style={{ background: "#fafafa", border: "1px solid var(--border-card)", borderRadius: 8, padding: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 700 }}>
+                <span>Running on Node B-03</span>
+                <span style={{ fontSize: 10, color: "var(--text-muted)" }}>6/23/2026</span>
+              </div>
+              <div className="mono" style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                Downloading a verified aggregation input artifact.
               </div>
             </div>
           </div>
@@ -897,7 +1117,7 @@ function App() {
   useInterval(refresh, 2000);
 
   const titles = {
-    home: { title: "VectorOps Cluster Intelligence", sub: "Contribute hardware acceleration to train VectorOps Machine Learning Models" },
+    home: { title: "VectorOps Cluster Intelligence", sub: "Live GPU clusters monitoring, traffic load, VRAM allocation, and CUDA cores" },
     work: { title: "Work & Process Queue", sub: "Manage pending workloads and active GPU job allocations" },
     notification: { title: "System Notifications", sub: "Real-time alerts for GPU utilization, thermal spikes, and task events" },
     support: { title: "IT Support Helpdesk", sub: "Direct chat communication channel with cluster administrators" },
