@@ -1337,7 +1337,7 @@ function App() {
         </nav>
 
         {/* Dynamic User Profile Footer */}
-        <div className="user-footer">
+        <div className="user-footer" style={{ flexDirection: "column", gap: 10, alignItems: "stretch" }}>
           <div className="user-profile-meta">
             <div className="user-avatar">{currentUser.avatar}</div>
             <div className="user-info">
@@ -1345,8 +1345,8 @@ function App() {
               <div className="user-role" title={currentUser.role}>{currentUser.role}</div>
             </div>
           </div>
-          <button onClick={handleLogout} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 4, display: "flex", alignItems: "center" }} title="Sign Out">
-            <Icons.LogOut />
+          <button onClick={handleLogout} className="btn-soft" style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "7px 10px", fontSize: 12 }} title="Sign Out of VectorOps Workspace">
+            <Icons.LogOut /> <span>Sign Out</span>
           </button>
         </div>
       </aside>
@@ -1362,11 +1362,16 @@ function App() {
             <h1 className="page-title">{titles[tab].title}</h1>
             <div className="page-subtitle">{titles[tab].sub}</div>
           </div>
-          <div className="nvidia-badge">
-            <svg width="36" height="28" viewBox="0 0 100 80" fill="#76b900">
-              <path d="M 30,10 C 20,10 10,20 10,30 C 10,50 30,70 50,70 C 60,70 70,65 75,55 L 65,50 C 60,55 55,60 48,60 C 35,60 22,48 22,35 C 22,22 35,18 45,18 L 45,10 Z"/>
-            </svg>
-            <span className="mono" style={{ fontWeight: 800, fontSize: 16, letterSpacing: "-0.04em", color: "#000" }}>NVIDIA.</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <button onClick={handleLogout} className="btn-soft" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }} title="Sign Out">
+              <Icons.LogOut /> <span>Sign Out</span>
+            </button>
+            <div className="nvidia-badge">
+              <svg width="36" height="28" viewBox="0 0 100 80" fill="#76b900">
+                <path d="M 30,10 C 20,10 10,20 10,30 C 10,50 30,70 50,70 C 60,70 70,65 75,55 L 65,50 C 60,55 55,60 48,60 C 35,60 22,48 22,35 C 22,22 35,18 45,18 L 45,10 Z"/>
+              </svg>
+              <span className="mono" style={{ fontWeight: 800, fontSize: 16, letterSpacing: "-0.04em", color: "#000" }}>NVIDIA.</span>
+            </div>
           </div>
         </header>
 
