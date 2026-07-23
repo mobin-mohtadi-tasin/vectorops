@@ -22,7 +22,7 @@ from app.notifications import notif_engine
 from app.agent import ask_agent
 from app.feedback import feedback_store
 from app.models import (
-    ScheduleDecision, ChaosRequest, CopilotQuery, Job,
+    ScheduleDecision, ChaosRequest, CopilotQuery,
     QueueJobSubmit, QueueJobItem, NotificationItem, SupportQuery, SupportMessage,
     AgentQuery, FeedbackSubmission, FeedbackItem, UserAllocation
 )
