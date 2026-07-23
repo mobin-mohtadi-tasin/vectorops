@@ -176,14 +176,18 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 14px 10px 0 10px;
-    border-top: 1px solid #e4e4e7;
+    padding: 10px 12px;
+    background: #ffffff;
+    border: 1px solid var(--border-card);
+    border-radius: 10px;
     margin-top: auto;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
   }
   .user-profile-meta {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
+    overflow: hidden;
   }
   .user-avatar {
     width: 32px;
@@ -213,11 +217,28 @@
     text-overflow: ellipsis;
   }
   .user-role {
-    font-size: 11px;
+    font-size: 10.5px;
     color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .btn-logout-icon {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: #71717a;
+    padding: 6px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+  }
+  .btn-logout-icon:hover {
+    background: #fff1f2;
+    color: #e11d48;
   }
 
   /* Main Content Area */
@@ -1337,7 +1358,7 @@ function App() {
         </nav>
 
         {/* Dynamic User Profile Footer */}
-        <div className="user-footer" style={{ flexDirection: "column", gap: 10, alignItems: "stretch" }}>
+        <div className="user-footer">
           <div className="user-profile-meta">
             <div className="user-avatar">{currentUser.avatar}</div>
             <div className="user-info">
@@ -1345,8 +1366,8 @@ function App() {
               <div className="user-role" title={currentUser.role}>{currentUser.role}</div>
             </div>
           </div>
-          <button onClick={handleLogout} className="btn-soft" style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "7px 10px", fontSize: 12 }} title="Sign Out of VectorOps Workspace">
-            <Icons.LogOut /> <span>Sign Out</span>
+          <button onClick={handleLogout} className="btn-logout-icon" title="Sign Out of VectorOps Workspace">
+            <Icons.LogOut />
           </button>
         </div>
       </aside>
