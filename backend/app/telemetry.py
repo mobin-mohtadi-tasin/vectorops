@@ -78,12 +78,44 @@ class ClusterSimEngine:
 
     def inject_chaos(self, cluster: str, intensity: float = 1.0):
         c_upper = cluster.upper()
-        self.chaos[c_upper] = max(self.chaos.get(c_upper, 0.0), intensity)
         other = "B" if c_upper == "A" else "A"
+        
+        # Accumulate chaos intensity on target cluster
+        self.chaos[c_upper] = min(3.0, self.chaos.get(c_upper, 0.0) + intensity)
         self.chaos[other] = 0.0
 
+        # Immediately apply +10 GB VRAM equivalent spike to target cluster nodes
+        for node_id, node in self.nodes.items():
+            if node.cluster == c_upper:
+                # Add 10 GB VRAM consumption per click (capped near total capacity)
+                boost_vram = 10.0
+                node.vram_used_gb = min(round(node.vram_total_gb * 0.96, 2), round(node.vram_used_gb + boost_vram, 2))
+                node.vram_util_pct = round(100 * node.vram_used_gb / node.vram_total_gb, 1)
+                node.gpu_core_util_pct = min(99.5, round(node.gpu_core_util_pct + 45.0, 1))
+                node.temp_c = min(96.0, round(node.temp_c + 20.0, 1))
+                node.power_draw_w = _power_from_util(node.gpu_core_util_pct)
+                node.active_jobs += 2
+                node.status = "unsafe"
+            elif node.cluster == other:
+                # Instantly clear chaos and restore opposite cluster nodes to healthy state
+                node.gpu_core_util_pct = max(10.0, round(node.gpu_core_util_pct * 0.3, 1))
+                node.vram_used_gb = round(node.vram_total_gb * 0.25, 2)
+                node.vram_util_pct = round(100 * node.vram_used_gb / node.vram_total_gb, 1)
+                node.temp_c = _temp_from_util(node.gpu_core_util_pct, ambient=24.0)
+                node.power_draw_w = _power_from_util(node.gpu_core_util_pct)
+                node.status = "healthy"
+
     def clear_chaos(self, cluster: str):
-        self.chaos[cluster.upper()] = 0.0
+        c_upper = cluster.upper()
+        self.chaos[c_upper] = 0.0
+        for node_id, node in self.nodes.items():
+            if node.cluster == c_upper:
+                node.gpu_core_util_pct = max(10.0, round(node.gpu_core_util_pct * 0.3, 1))
+                node.vram_used_gb = round(node.vram_total_gb * 0.25, 2)
+                node.vram_util_pct = round(100 * node.vram_used_gb / node.vram_total_gb, 1)
+                node.temp_c = _temp_from_util(node.gpu_core_util_pct, ambient=24.0)
+                node.power_draw_w = _power_from_util(node.gpu_core_util_pct)
+                node.status = "healthy"
 
     def tick(self):
         """Advance simulated time by one step (~2s of wall clock ~= a few
@@ -93,7 +125,7 @@ class ClusterSimEngine:
 
         for node_id, node in self.nodes.items():
             cfg = CLUSTER_CONFIG[node.cluster]
-            chaos_boost = self.chaos.get(node.cluster, 0.0) * 28  # big deliberate spike
+            chaos_boost = self.chaos.get(node.cluster, 0.0) * 32  # big deliberate spike
 
             drift = random.gauss(0, 4)
             burst = 18 if random.random() < 0.05 else 0  # occasional job burst
@@ -128,10 +160,10 @@ class ClusterSimEngine:
             else:
                 node.status = "healthy"
 
-        # chaos auto-decays after ~15 ticks so the demo naturally resolves
+        # chaos auto-decays gracefully
         for c in self.chaos:
             if self.chaos[c] > 0:
-                self.chaos[c] = max(0.0, self.chaos[c] - 0.07)
+                self.chaos[c] = max(0.0, self.chaos[c] - 0.03)
 
     def snapshot(self):
         return list(self.nodes.values())
