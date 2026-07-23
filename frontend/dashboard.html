@@ -1251,12 +1251,7 @@ function App() {
     if (saved) {
       try { return JSON.parse(saved); } catch(e){}
     }
-    return {
-      name: "Wasif Abdullah Musa",
-      role: "Chairman / Lab Director",
-      email: "wasif@vectorops.ai",
-      avatar: "W"
-    };
+    return null; // Show Login Page first!
   });
 
   const [tab, setTab] = useState("home");
