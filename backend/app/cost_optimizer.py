@@ -22,13 +22,16 @@ CLOUD_RATE_USD_PER_GPU_HOUR = {
 
 def evaluate_node(node: NodeTelemetry) -> Dict:
     is_idle = node.gpu_core_util_pct < IDLE_THRESHOLD_PCT and node.idle_minutes >= IDLE_THRESHOLD_MIN
-    idle_hours = node.idle_minutes / 60.0
-
-    wasted_kwh = (node.power_draw_w / 1000.0) * idle_hours
-    wasted_electricity_usd = wasted_kwh * ELECTRICITY_RATE_USD_PER_KWH
-
     cloud_rate = CLOUD_RATE_USD_PER_GPU_HOUR.get(node.gpu_model, CLOUD_RATE_USD_PER_GPU_HOUR["default"])
-    opportunity_cost_usd = cloud_rate * idle_hours  # what this idle time *could* have saved if used
+
+    if is_idle:
+        idle_hours = node.idle_minutes / 60.0
+        wasted_kwh = (node.power_draw_w / 1000.0) * idle_hours
+        wasted_electricity_usd = wasted_kwh * ELECTRICITY_RATE_USD_PER_KWH
+        opportunity_cost_usd = cloud_rate * idle_hours
+    else:
+        wasted_electricity_usd = 0.0
+        opportunity_cost_usd = 0.0
 
     return {
         "node_id": node.node_id,
@@ -36,7 +39,7 @@ def evaluate_node(node: NodeTelemetry) -> Dict:
         "is_idle": is_idle,
         "idle_minutes": node.idle_minutes,
         "wasted_electricity_usd": round(wasted_electricity_usd, 4),
-        "opportunity_cost_usd_per_hour": round(opportunity_cost_usd, 2) if idle_hours else 0.0,
+        "opportunity_cost_usd_per_hour": round(opportunity_cost_usd, 2) if is_idle else 0.0,
         "cloud_equivalent_rate": cloud_rate,
     }
 
@@ -45,16 +48,16 @@ def cluster_cost_report(nodes: List[NodeTelemetry]) -> Dict:
     rows = [evaluate_node(n) for n in nodes]
     idle_rows = [r for r in rows if r["is_idle"]]
 
-    total_wasted_electricity = round(sum(r["wasted_electricity_usd"] for r in rows), 4)
-    total_opportunity_cost = round(sum(r["opportunity_cost_usd_per_hour"] for r in rows), 2)
+    total_wasted_electricity = round(sum(r["wasted_electricity_usd"] for r in idle_rows), 4)
+    total_opportunity_cost = round(sum(r["opportunity_cost_usd_per_hour"] for r in idle_rows), 2)
 
     by_cluster: Dict[str, Dict] = {}
     for r in rows:
         c = by_cluster.setdefault(r["cluster"], {"idle_nodes": 0, "total_nodes": 0, "opportunity_cost_usd": 0.0})
         c["total_nodes"] += 1
-        c["opportunity_cost_usd"] += r["opportunity_cost_usd_per_hour"]
         if r["is_idle"]:
             c["idle_nodes"] += 1
+            c["opportunity_cost_usd"] += r["opportunity_cost_usd_per_hour"]
     for c in by_cluster.values():
         c["opportunity_cost_usd"] = round(c["opportunity_cost_usd"], 2)
 

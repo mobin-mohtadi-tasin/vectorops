@@ -33,6 +33,9 @@ recent_decisions: List[ScheduleDecision] = []
 MAX_DECISION_LOG = 50
 
 
+failure_model.score_nodes(engine.snapshot())
+
+
 async def background_tick_loop():
     while True:
         engine.tick()
@@ -120,9 +123,11 @@ def inject_chaos(req: ChaosRequest):
 
 
 @app.post("/chaos/clear")
-def clear_chaos(cluster: str):
-    engine.clear_chaos(cluster.upper())
-    return {"status": "chaos cleared", "cluster": cluster.upper()}
+def clear_chaos(req: ChaosRequest):
+    if req.cluster.upper() not in ("A", "B"):
+        raise HTTPException(status_code=400, detail="cluster must be 'A' or 'B'")
+    engine.clear_chaos(req.cluster.upper())
+    return {"status": "chaos cleared", "cluster": req.cluster.upper()}
 
 
 @app.post("/copilot/ask")

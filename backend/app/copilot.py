@@ -42,7 +42,7 @@ def _build_context(nodes: List[NodeTelemetry], recent_decisions: List[ScheduleDe
         }
         for n in nodes
     ]
-    decisions_summary = [d.dict() for d in recent_decisions[-5:]]
+    decisions_summary = [d.model_dump() for d in recent_decisions[-5:]]
     return json.dumps({"nodes": node_summary, "recent_decisions": decisions_summary}, indent=None)
 
 
@@ -53,6 +53,8 @@ def _fallback_answer(question: str, nodes: List[NodeTelemetry], recent_decisions
         return (
             f"[offline mode -- Ollama not reachable] Most recent decision: {d.reason}"
         )
+    if not nodes:
+        return "[offline mode -- Ollama not reachable] No telemetry data available."
     hottest = max(nodes, key=lambda n: n.temp_c)
     idlest = min(nodes, key=lambda n: n.gpu_core_util_pct)
     return (

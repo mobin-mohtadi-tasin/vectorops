@@ -208,8 +208,11 @@ function CopilotPanel() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: q })
       });
+      if (!res.ok) {
+        throw new Error(`Server returned HTTP ${res.status}`);
+      }
       const data = await res.json();
-      setMessages(m => [...m, { role: "assistant", text: data.answer, source: data.source }]);
+      setMessages(m => [...m, { role: "assistant", text: data.answer || "No answer returned.", source: data.source }]);
     } catch (e) {
       setMessages(m => [...m, { role: "assistant", text: "Backend unreachable — is FastAPI running on :8000?" }]);
     }

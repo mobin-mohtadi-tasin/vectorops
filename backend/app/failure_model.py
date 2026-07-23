@@ -47,6 +47,8 @@ def _heuristic_risk(node: NodeTelemetry):
 
 
 def score_nodes(nodes: List[NodeTelemetry]) -> List[NodeTelemetry]:
+    if not nodes:
+        return []
     _try_load()
 
     if _clf is None or _reg is None:

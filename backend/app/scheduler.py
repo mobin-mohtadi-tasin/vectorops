@@ -83,15 +83,14 @@ def choose_node(
 
     scored = {n.node_id: node_score(n) for n in safe_nodes}
     current = next((n for n in safe_nodes if n.node_id == current_node_id), None)
-    current_was_unsafe = current_node_id is not None and current is None and any(
-        n.node_id == current_node_id for n in nodes
-    )
+    origin_node = next((n for n in nodes if n.node_id == current_node_id), None)
+    current_was_unsafe = origin_node is not None and not is_safe(origin_node)
 
     best_id = max(scored, key=scored.get)
     best_score = scored[best_id]
 
     if current_was_unsafe:
-        origin = next(n for n in nodes if n.node_id == current_node_id)
+        origin = origin_node
         return ScheduleDecision(
             job_id="",
             from_node=current_node_id,
