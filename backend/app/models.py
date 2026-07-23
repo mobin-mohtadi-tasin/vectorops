@@ -2,7 +2,7 @@
 VectorOps - Shared data models
 """
 from pydantic import BaseModel
-from typing import Optional, List, Literal
+from typing import Optional, List, Literal, Dict, Any
 
 
 class NodeTelemetry(BaseModel):
@@ -48,3 +48,69 @@ class ChaosRequest(BaseModel):
 
 class CopilotQuery(BaseModel):
     question: str
+
+
+class QueueJobSubmit(BaseModel):
+    name: str
+    vram_gb: float
+    priority: Literal["High", "Medium", "Low"] = "Medium"
+    user: str = "User-01"
+
+
+class QueueJobItem(BaseModel):
+    job_id: str
+    name: str
+    user: str
+    vram_gb: float
+    priority: str
+    status: Literal["Queued", "Running", "Completed", "Cancelled"] = "Queued"
+    submitted_at: str
+    assigned_node: Optional[str] = None
+
+
+class NotificationItem(BaseModel):
+    id: str
+    timestamp: str
+    title: str
+    message: str
+    type: Literal["info", "warning", "danger", "success"] = "info"
+    read: bool = False
+
+
+class SupportMessage(BaseModel):
+    id: str
+    sender: Literal["user", "support"]
+    text: str
+    timestamp: str
+
+
+class SupportQuery(BaseModel):
+    message: str
+
+
+class AgentQuery(BaseModel):
+    prompt: str
+    api_key: Optional[str] = None
+
+
+class FeedbackSubmission(BaseModel):
+    user_name: str
+    email: Optional[str] = None
+    category: Literal["bug", "feature", "ui", "general"] = "general"
+    rating: int = 5
+    comments: str
+
+
+class FeedbackItem(FeedbackSubmission):
+    id: str
+    created_at: str
+
+
+class UserAllocation(BaseModel):
+    username: str
+    tier: str
+    allocated_vram_gb: float
+    used_vram_gb: float
+    max_jobs: int
+    active_jobs: int
+    allocated_nodes: List[str]
