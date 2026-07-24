@@ -14,8 +14,13 @@ IDLE_THRESHOLD_MIN = 30.0
 
 # rough $/GPU-hour equivalents for cloud alternatives, by tier
 CLOUD_RATE_USD_PER_GPU_HOUR = {
-    "RTX 4090": 0.79,   # ~ comparable Colab Pro+ / Lambda spot tier
-    "RTX 3080": 0.45,   # ~ comparable Kaggle/Colab free-to-plus tier
+    "RTX 4090": 0.79,      # ~ comparable Colab Pro+ / Lambda spot tier
+    "RTX 3080": 0.45,      # ~ comparable Kaggle/Colab free-to-plus tier
+    "NVIDIA A100": 1.89,   # ~ Enterprise A100 SXM 80GB tier
+    "NVIDIA L4": 0.55,     # ~ Google Cloud L4 inference tier
+    "NVIDIA H100": 3.49,   # ~ Hyperscale H100 SXM5 tier
+    "RTX 6000 Ada": 1.25,  # ~ Workstation Ada Generation tier
+    "Tesla T4": 0.35,      # ~ Standard T4 cloud tier
     "default": 0.60,
 }
 

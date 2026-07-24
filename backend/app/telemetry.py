@@ -20,8 +20,13 @@ from app.models import NodeTelemetry
 random.seed(42)
 
 CLUSTER_CONFIG = {
-    "A": {"n_nodes": 6, "gpu_model": "RTX 4090", "vram_total": 24, "base_util": 78, "base_temp": 68},
-    "B": {"n_nodes": 6, "gpu_model": "RTX 3080", "vram_total": 10, "base_util": 22, "base_temp": 48},
+    "A": {"name": "Lab Cluster", "n_nodes": 4, "gpu_model": "RTX 4090", "vram_total": 24, "cuda_cores": 16384, "base_util": 82, "base_temp": 78},
+    "B": {"name": "Faculty Cluster", "n_nodes": 4, "gpu_model": "RTX 3080", "vram_total": 10, "cuda_cores": 8704, "base_util": 24, "base_temp": 48},
+    "C": {"name": "Enterprise HPC", "n_nodes": 4, "gpu_model": "NVIDIA A100", "vram_total": 80, "cuda_cores": 6912, "base_util": 86, "base_temp": 75},
+    "D": {"name": "Edge Inference", "n_nodes": 4, "gpu_model": "NVIDIA L4", "vram_total": 24, "cuda_cores": 7424, "base_util": 45, "base_temp": 56},
+    "E": {"name": "Cloud Hyperscale", "n_nodes": 4, "gpu_model": "NVIDIA H100", "vram_total": 80, "cuda_cores": 16896, "base_util": 64, "base_temp": 66},
+    "F": {"name": "Visual Workstation", "n_nodes": 4, "gpu_model": "RTX 6000 Ada", "vram_total": 48, "cuda_cores": 18176, "base_util": 38, "base_temp": 52},
+    "G": {"name": "Backup Compute", "n_nodes": 4, "gpu_model": "Tesla T4", "vram_total": 16, "cuda_cores": 2560, "base_util": 14, "base_temp": 42},
 }
 
 JOB_NAME_POOL = [
@@ -50,7 +55,7 @@ class ClusterSimEngine:
     def __init__(self):
         self.nodes: Dict[str, NodeTelemetry] = {}
         self.tick_count = 0
-        self.chaos: Dict[str, float] = {"A": 0.0, "B": 0.0}  # active chaos intensity per cluster
+        self.chaos: Dict[str, float] = {c: 0.0 for c in CLUSTER_CONFIG}  # active chaos intensity per cluster
         self._init_nodes()
 
     def _init_nodes(self):
@@ -60,7 +65,7 @@ class ClusterSimEngine:
                 util = max(0, min(99, random.gauss(cfg["base_util"], 8)))
                 vram_total = cfg["vram_total"]
                 vram_used = round(vram_total * (util / 100.0) * random.uniform(0.7, 1.0), 2)
-                temp = _temp_from_util(util, ambient=26 if cluster == "A" else 24)
+                temp = _temp_from_util(util, ambient=26 if cluster in ("A", "C") else 24)
                 self.nodes[node_id] = NodeTelemetry(
                     node_id=node_id,
                     cluster=cluster,
@@ -78,11 +83,11 @@ class ClusterSimEngine:
 
     def inject_chaos(self, cluster: str, intensity: float = 1.0):
         c_upper = cluster.upper()
-        other = "B" if c_upper == "A" else "A"
+        if c_upper not in CLUSTER_CONFIG:
+            return
         
         # Accumulate chaos intensity on target cluster
         self.chaos[c_upper] = min(3.0, self.chaos.get(c_upper, 0.0) + intensity)
-        self.chaos[other] = 0.0
 
         # Immediately apply +10 GB VRAM equivalent spike to target cluster nodes
         for node_id, node in self.nodes.items():
@@ -96,18 +101,19 @@ class ClusterSimEngine:
                 node.power_draw_w = _power_from_util(node.gpu_core_util_pct)
                 node.active_jobs += 2
                 node.status = "unsafe"
-            elif node.cluster == other:
-                # Instantly clear chaos and restore opposite cluster nodes to healthy state
+
+    def clear_chaos(self, cluster: str):
+        c_upper = cluster.upper()
+        if c_upper in self.chaos:
+            self.chaos[c_upper] = 0.0
+        for node_id, node in self.nodes.items():
+            if node.cluster == c_upper:
                 node.gpu_core_util_pct = max(10.0, round(node.gpu_core_util_pct * 0.3, 1))
                 node.vram_used_gb = round(node.vram_total_gb * 0.25, 2)
                 node.vram_util_pct = round(100 * node.vram_used_gb / node.vram_total_gb, 1)
                 node.temp_c = _temp_from_util(node.gpu_core_util_pct, ambient=24.0)
                 node.power_draw_w = _power_from_util(node.gpu_core_util_pct)
                 node.status = "healthy"
-
-    def clear_chaos(self, cluster: str):
-        c_upper = cluster.upper()
-        self.chaos[c_upper] = 0.0
         for node_id, node in self.nodes.items():
             if node.cluster == c_upper:
                 node.gpu_core_util_pct = max(10.0, round(node.gpu_core_util_pct * 0.3, 1))

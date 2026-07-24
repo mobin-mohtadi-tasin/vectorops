@@ -27,7 +27,8 @@ def _domain_guard_check(prompt: str) -> bool:
         "gpu", "vram", "cluster", "node", "scheduler", "schedule", "temp", "thermal",
         "power", "util", "vectorops", "job", "queue", "workload", "fail", "bottleneck",
         "cost", "chaos", "evacuate", "migrate", "allocation", "quota", "memory", "cuda",
-        "oom", "support", "help", "a-0", "b-0", "rtx", "4090", "3080", "slurm", "k8s"
+        "oom", "support", "help", "a-0", "b-0", "c-0", "d-0", "e-0", "f-0", "g-0",
+        "rtx", "4090", "3080", "a100", "h100", "l4", "t4", "ada", "slurm", "k8s"
     ]
     return any(k in prompt_lower for k in allowed_keywords)
 
@@ -43,13 +44,13 @@ def _offline_fallback(prompt: str, nodes: Optional[List[NodeTelemetry]] = None) 
     
     prompt_lower = prompt.lower()
     if "temp" in prompt_lower or "hot" in prompt_lower or "thermal" in prompt_lower:
-        return "Cluster nodes operating above 85°C are flagged as unsafe by the scheduler. Check Cluster A nodes for thermal throttling or trigger an evacuation in the Work queue."
+        return "Cluster nodes operating above 85°C are flagged as unsafe by the scheduler. Check active nodes for thermal throttling or trigger an evacuation in the Work queue."
     elif "vram" in prompt_lower or "memory" in prompt_lower or "allocat" in prompt_lower:
-        return "VRAM headroom is weighted at 40% in the placement scoring algorithm. High-memory jobs (>12GB) are automatically routed to Cluster A's RTX 4090 nodes."
+        return "VRAM headroom is weighted at 40% in the placement scoring algorithm. High-memory jobs (>40GB) are automatically routed to Cluster C (A100) or Cluster E (H100) nodes."
     elif "queue" in prompt_lower or "job" in prompt_lower:
         return "Jobs in the Work queue are evaluated based on required VRAM and priority. Migration costs are penalized to avoid thrashing jobs for marginal score gains."
     else:
-        return "VectorOps is currently monitoring 12 nodes across Cluster A and Cluster B. You can inspect live telemetry on the Home dashboard or manage pending workloads in the Work tab."
+        return "VectorOps is currently monitoring 28 nodes across 7 GPU clusters (Clusters A through G). You can inspect live telemetry on the Home dashboard or manage pending workloads in the Work tab."
 
 
 def ask_agent(prompt: str, api_key: Optional[str] = None, nodes: Optional[List[NodeTelemetry]] = None) -> Dict:

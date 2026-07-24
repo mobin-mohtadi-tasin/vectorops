@@ -1,6 +1,7 @@
 """
 VectorOps - Shared data models
 """
+# pyrefly: ignore [missing-import]
 from pydantic import BaseModel
 from typing import Optional, List, Literal, Dict, Any
 

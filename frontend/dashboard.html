@@ -563,24 +563,28 @@ function LoginPage({ onLogin }) {
 }
 
 /* --- TAB 1: HOME & DASHBOARD (GPU CLUSTERS FOCUS) --- */
+const CLUSTER_META = {
+  A: { name: "Lab Cluster", model: "NVIDIA GeForce RTX 4090", coresPerNode: 16384 },
+  B: { name: "Faculty Cluster", model: "NVIDIA GeForce RTX 3080", coresPerNode: 8704 },
+  C: { name: "Enterprise HPC", model: "NVIDIA A100-SXM4-80GB", coresPerNode: 6912 },
+  D: { name: "Edge Inference", model: "NVIDIA L4 Tensor Core", coresPerNode: 7424 },
+  E: { name: "Cloud Hyperscale", model: "NVIDIA H100 SXM5-80GB", coresPerNode: 16896 },
+  F: { name: "Visual Workstation", model: "NVIDIA RTX 6000 Ada", coresPerNode: 18176 },
+  G: { name: "Backup Compute", model: "NVIDIA Tesla T4", coresPerNode: 2560 }
+};
+
 function HomeTab({ nodes, decisions, cost, refresh }) {
-  const clusterA = nodes.filter(n => n.cluster === "A");
-  const clusterB = nodes.filter(n => n.cluster === "B");
+  // Extract all cluster keys dynamically (A, B, C, D, E, F, G)
+  const rawKeys = Array.from(new Set(nodes.map(n => n.cluster))).sort();
+  const clusterKeys = rawKeys.length > 0 ? rawKeys : ["A", "B", "C", "D", "E", "F", "G"];
 
-  // Cluster A Specs & Traffic
-  const vramA_used = clusterA.reduce((a, n) => a + n.vram_used_gb, 0);
-  const vramA_total = clusterA.reduce((a, n) => a + n.vram_total_gb, 0) || 144.0;
-  const utilA = clusterA.length ? (clusterA.reduce((a, n) => a + n.gpu_core_util_pct, 0) / clusterA.length).toFixed(1) : "82.4";
-  const cudaCoresA = clusterA.length * 16384; // 6 x 16,384 for RTX 4090
+  // Global calculations across all clusters
+  const totalCudaCores = nodes.reduce((acc, n) => {
+    const meta = CLUSTER_META[n.cluster] || { coresPerNode: 8000 };
+    return acc + meta.coresPerNode;
+  }, 0);
 
-  // Cluster B Specs & Traffic
-  const vramB_used = clusterB.reduce((a, n) => a + n.vram_used_gb, 0);
-  const vramB_total = clusterB.reduce((a, n) => a + n.vram_total_gb, 0) || 60.0;
-  const utilB = clusterB.length ? (clusterB.reduce((a, n) => a + n.gpu_core_util_pct, 0) / clusterB.length).toFixed(1) : "24.1";
-  const cudaCoresB = clusterB.length * 8704;  // 6 x 8,704 for RTX 3080
-
-  const totalCudaCores = cudaCoresA + cudaCoresB;
-  const totalVramGB = vramA_total + vramB_total;
+  const totalVramGB = nodes.reduce((a, n) => a + n.vram_total_gb, 0);
 
   const triggerChaos = async (cluster) => {
     await fetch(`${API}/chaos`, {
@@ -606,15 +610,15 @@ function HomeTab({ nodes, decisions, cost, refresh }) {
       <div className="stats-grid">
         <div className="stat-card">
           <div className="stat-label">ONLINE GPU CLUSTERS</div>
-          <div className="stat-value">2 Clusters ({nodes.length} Nodes)</div>
+          <div className="stat-value">{clusterKeys.length} Clusters ({nodes.length} Nodes)</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">TOTAL CUDA CORES</div>
-          <div className="stat-value">{totalCudaCores.toLocaleString()} Cores</div>
+          <div className="stat-value">{totalCudaCores > 0 ? totalCudaCores.toLocaleString() : "295,424"} Cores</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">COMBINED VRAM CAPACITY</div>
-          <div className="stat-value">{totalVramGB.toFixed(1)} GB Total</div>
+          <div className="stat-value">{totalVramGB > 0 ? totalVramGB.toFixed(1) : "1,128.0"} GB Total</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">ENERGY COST</div>
@@ -622,173 +626,117 @@ function HomeTab({ nodes, decisions, cost, refresh }) {
         </div>
       </div>
 
-      {/* Cluster A & Cluster B Panels */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-        
-        {/* Cluster A: Lab Cluster (BUSY / HIGH TRAFFIC) */}
-        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--text-heading)" }}>Cluster A — Lab Cluster</h3>
-                <span className="badge-danger">HIGH TRAFFIC</span>
-              </div>
-              <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>6x NVIDIA GeForce RTX 4090 Nodes</div>
-            </div>
-            <button onClick={() => triggerChaos("A")} className="btn-soft" style={{ fontSize: 11.5 }}>⚡ Inject Chaos</button>
-          </div>
+      {/* Dynamic 7 GPU Cluster Panels Grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(440px, 1fr))", gap: 20 }}>
+        {clusterKeys.map(cKey => {
+          const cNodes = nodes.filter(n => n.cluster === cKey);
+          const meta = CLUSTER_META[cKey] || { name: `Cluster ${cKey}`, model: "NVIDIA GPU", coresPerNode: 8000 };
+          const vramUsed = cNodes.reduce((a, n) => a + n.vram_used_gb, 0);
+          const vramTotal = cNodes.reduce((a, n) => a + n.vram_total_gb, 0) || 1.0;
+          const utilAvg = cNodes.length ? (cNodes.reduce((a, n) => a + n.gpu_core_util_pct, 0) / cNodes.length).toFixed(1) : "0.0";
+          const clusterCores = (cNodes.length || 4) * meta.coresPerNode;
+          
+          let badgeClass = "badge-ready";
+          let badgeText = "LIGHT TRAFFIC";
+          if (utilAvg > 75) {
+            badgeClass = "badge-danger";
+            badgeText = "HIGH TRAFFIC";
+          } else if (utilAvg > 45) {
+            badgeClass = "badge-warning";
+            badgeText = "MODERATE LOAD";
+          }
 
-          {/* Cluster A Line Progress Bars */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 12, background: "#fafafa", padding: 14, borderRadius: 10, border: "1px solid var(--border-card)" }}>
-            
-            {/* VRAM Segment */}
-            <div className="progress-segment">
-              <div className="progress-header">
-                <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>VRAM Allocation</span>
-                <span className="mono" style={{ color: "#2563eb", fontWeight: 700 }}>
-                  {vramA_used.toFixed(1)} / {vramA_total.toFixed(1)} GB ({Math.round((vramA_used/vramA_total)*100)}%)
-                </span>
-              </div>
-              <div className="progress-bar-bg" style={{ height: 10, background: "#e2e8f0", borderRadius: 5, overflow: "hidden" }}>
-                <div className="progress-bar-fill" style={{ width: `${Math.max(4, Math.min(100, (vramA_used/vramA_total)*100))}%`, height: "100%", background: "#2563eb", borderRadius: 5, transition: "width 0.6s ease" }} />
-              </div>
-            </div>
-
-            {/* GPU Core Load Segment */}
-            <div className="progress-segment">
-              <div className="progress-header">
-                <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>GPU Core Traffic Load</span>
-                <span className="mono" style={{ color: utilA > 75 ? "#e11d48" : "#059669", fontWeight: 700 }}>{utilA}% Load</span>
-              </div>
-              <div className="progress-bar-bg" style={{ height: 10, background: "#e2e8f0", borderRadius: 5, overflow: "hidden" }}>
-                <div className="progress-bar-fill" style={{ width: `${utilA}%`, height: "100%", background: utilA > 75 ? "#e11d48" : "#059669", borderRadius: 5, transition: "width 0.6s ease" }} />
-              </div>
-            </div>
-
-            {/* CUDA Cores Segment */}
-            <div className="progress-segment">
-              <div className="progress-header">
-                <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>CUDA Cores Active</span>
-                <span className="mono" style={{ color: "var(--text-heading)", fontWeight: 700 }}>98,304 / 98,304 Cores</span>
-              </div>
-              <div className="progress-bar-bg" style={{ height: 10, background: "#e2e8f0", borderRadius: 5, overflow: "hidden" }}>
-                <div className="progress-bar-fill" style={{ width: "100%", height: "100%", background: "#09090b", borderRadius: 5 }} />
-              </div>
-            </div>
-
-          </div>
-
-          {/* Nodes Breakdown Grid */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            {clusterA.map(n => {
-              const vramPct = Math.round((n.vram_used_gb / n.vram_total_gb) * 100);
-              return (
-                <div key={n.node_id} style={{ background: "#ffffff", border: "1px solid var(--border-card)", borderRadius: 8, padding: 10, display: "flex", flexDirection: "column", gap: 6 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span className="mono" style={{ fontWeight: 700, fontSize: 12 }}>{n.node_id}</span>
-                    <span className={n.status === "unsafe" ? "badge-danger" : n.status === "warning" ? "badge-warning" : "badge-ready"}>{n.status.toUpperCase()}</span>
+          return (
+            <div key={cKey} className="card" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <h3 style={{ margin: 0, fontSize: 16.5, fontWeight: 700, color: "var(--text-heading)" }}>
+                      Cluster {cKey} — {meta.name}
+                    </h3>
+                    <span className={badgeClass}>{badgeText}</span>
                   </div>
-                  
-                  {/* Node Mini VRAM Line Bar */}
-                  <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: "var(--text-muted)", marginBottom: 2 }} className="mono">
-                      <span>VRAM Allocation</span>
-                      <span style={{ color: "#2563eb", fontWeight: 700 }}>{n.vram_used_gb}/{n.vram_total_gb} GB</span>
-                    </div>
-                    <div style={{ height: 6, background: "#f4f4f5", borderRadius: 3, overflow: "hidden" }}>
-                      <div style={{ width: `${Math.max(4, vramPct)}%`, height: "100%", background: "#2563eb", borderRadius: 3 }} />
-                    </div>
+                  <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
+                    {cNodes.length || 4}x {meta.model} Nodes
                   </div>
-
-                  <div style={{ fontSize: 10.5, color: "var(--text-muted)" }} className="mono">Util: {n.gpu_core_util_pct}% · {n.temp_c}°C</div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
+                <button onClick={() => triggerChaos(cKey)} className="btn-soft" style={{ fontSize: 11.5 }}>
+                  ⚡ Inject Chaos
+                </button>
+              </div>
 
-        {/* Cluster B: Faculty Cluster (LIGHT TRAFFIC / IDLE) */}
-        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--text-heading)" }}>Cluster B — Faculty Cluster</h3>
-                <span className="badge-ready">LIGHT TRAFFIC</span>
-              </div>
-              <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>6x NVIDIA GeForce RTX 3080 Nodes</div>
-            </div>
-            <button onClick={() => triggerChaos("B")} className="btn-soft" style={{ fontSize: 11.5 }}>⚡ Inject Chaos</button>
-          </div>
-
-          {/* Cluster B Line Progress Bars */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 12, background: "#fafafa", padding: 14, borderRadius: 10, border: "1px solid var(--border-card)" }}>
-            
-            {/* VRAM Segment */}
-            <div className="progress-segment">
-              <div className="progress-header">
-                <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>VRAM Allocation</span>
-                <span className="mono" style={{ color: "#2563eb", fontWeight: 700 }}>
-                  {vramB_used.toFixed(1)} / {vramB_total.toFixed(1)} GB ({Math.round((vramB_used/vramB_total)*100)}%)
-                </span>
-              </div>
-              <div className="progress-bar-bg" style={{ height: 10, background: "#e2e8f0", borderRadius: 5, overflow: "hidden" }}>
-                <div className="progress-bar-fill" style={{ width: `${Math.max(4, Math.min(100, (vramB_used/vramB_total)*100))}%`, height: "100%", background: "#2563eb", borderRadius: 5, transition: "width 0.6s ease" }} />
-              </div>
-            </div>
-
-            {/* GPU Core Load Segment */}
-            <div className="progress-segment">
-              <div className="progress-header">
-                <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>GPU Core Traffic Load</span>
-                <span className="mono" style={{ color: "#059669", fontWeight: 700 }}>{utilB}% Load</span>
-              </div>
-              <div className="progress-bar-bg" style={{ height: 10, background: "#e2e8f0", borderRadius: 5, overflow: "hidden" }}>
-                <div className="progress-bar-fill" style={{ width: `${utilB}%`, height: "100%", background: "#059669", borderRadius: 5, transition: "width 0.6s ease" }} />
-              </div>
-            </div>
-
-            {/* CUDA Cores Segment */}
-            <div className="progress-segment">
-              <div className="progress-header">
-                <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>CUDA Cores Active</span>
-                <span className="mono" style={{ color: "var(--text-heading)", fontWeight: 700 }}>52,224 / 52,224 Cores</span>
-              </div>
-              <div className="progress-bar-bg" style={{ height: 10, background: "#e2e8f0", borderRadius: 5, overflow: "hidden" }}>
-                <div className="progress-bar-fill" style={{ width: "100%", height: "100%", background: "#09090b", borderRadius: 5 }} />
-              </div>
-            </div>
-
-          </div>
-
-          {/* Nodes Breakdown Grid */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            {clusterB.map(n => {
-              const vramPct = Math.round((n.vram_used_gb / n.vram_total_gb) * 100);
-              return (
-                <div key={n.node_id} style={{ background: "#ffffff", border: "1px solid var(--border-card)", borderRadius: 8, padding: 10, display: "flex", flexDirection: "column", gap: 6 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span className="mono" style={{ fontWeight: 700, fontSize: 12 }}>{n.node_id}</span>
-                    <span className={n.status === "unsafe" ? "badge-danger" : n.status === "warning" ? "badge-warning" : "badge-ready"}>{n.status.toUpperCase()}</span>
+              {/* Progress Bars Container */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 12, background: "#fafafa", padding: 14, borderRadius: 10, border: "1px solid var(--border-card)" }}>
+                {/* VRAM Segment */}
+                <div className="progress-segment">
+                  <div className="progress-header">
+                    <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>VRAM Allocation</span>
+                    <span className="mono" style={{ color: "#2563eb", fontWeight: 700 }}>
+                      {vramUsed.toFixed(1)} / {vramTotal.toFixed(1)} GB ({Math.round((vramUsed / vramTotal) * 100)}%)
+                    </span>
                   </div>
-                  
-                  {/* Node Mini VRAM Line Bar */}
-                  <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: "var(--text-muted)", marginBottom: 2 }} className="mono">
-                      <span>VRAM Allocation</span>
-                      <span style={{ color: "#2563eb", fontWeight: 700 }}>{n.vram_used_gb}/{n.vram_total_gb} GB</span>
-                    </div>
-                    <div style={{ height: 6, background: "#f4f4f5", borderRadius: 3, overflow: "hidden" }}>
-                      <div style={{ width: `${Math.max(4, vramPct)}%`, height: "100%", background: "#2563eb", borderRadius: 3 }} />
-                    </div>
+                  <div className="progress-bar-bg" style={{ height: 10, background: "#e2e8f0", borderRadius: 5, overflow: "hidden" }}>
+                    <div className="progress-bar-fill" style={{ width: `${Math.max(4, Math.min(100, (vramUsed / vramTotal) * 100))}%`, height: "100%", background: "#2563eb", borderRadius: 5, transition: "width 0.6s ease" }} />
                   </div>
-
-                  <div style={{ fontSize: 10.5, color: "var(--text-muted)" }} className="mono">Util: {n.gpu_core_util_pct}% · {n.temp_c}°C</div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
 
+                {/* GPU Core Load Segment */}
+                <div className="progress-segment">
+                  <div className="progress-header">
+                    <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>GPU Core Traffic Load</span>
+                    <span className="mono" style={{ color: utilAvg > 75 ? "#e11d48" : utilAvg > 45 ? "#d97706" : "#059669", fontWeight: 700 }}>
+                      {utilAvg}% Load
+                    </span>
+                  </div>
+                  <div className="progress-bar-bg" style={{ height: 10, background: "#e2e8f0", borderRadius: 5, overflow: "hidden" }}>
+                    <div className="progress-bar-fill" style={{ width: `${utilAvg}%`, height: "100%", background: utilAvg > 75 ? "#e11d48" : utilAvg > 45 ? "#d97706" : "#059669", borderRadius: 5, transition: "width 0.6s ease" }} />
+                  </div>
+                </div>
+
+                {/* CUDA Cores Segment */}
+                <div className="progress-segment">
+                  <div className="progress-header">
+                    <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>CUDA Cores Active</span>
+                    <span className="mono" style={{ color: "var(--text-heading)", fontWeight: 700 }}>
+                      {clusterCores.toLocaleString()} / {clusterCores.toLocaleString()} Cores
+                    </span>
+                  </div>
+                  <div className="progress-bar-bg" style={{ height: 10, background: "#e2e8f0", borderRadius: 5, overflow: "hidden" }}>
+                    <div className="progress-bar-fill" style={{ width: "100%", height: "100%", background: "#09090b", borderRadius: 5 }} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Nodes Breakdown Grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {cNodes.map(n => {
+                  const vramPct = Math.round((n.vram_used_gb / n.vram_total_gb) * 100);
+                  return (
+                    <div key={n.node_id} style={{ background: "#ffffff", border: "1px solid var(--border-card)", borderRadius: 8, padding: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span className="mono" style={{ fontWeight: 700, fontSize: 12 }}>{n.node_id}</span>
+                        <span className={n.status === "unsafe" ? "badge-danger" : n.status === "warning" ? "badge-warning" : "badge-ready"}>{n.status.toUpperCase()}</span>
+                      </div>
+                      
+                      {/* Node Mini VRAM Line Bar */}
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: "var(--text-muted)", marginBottom: 2 }} className="mono">
+                          <span>VRAM Allocation</span>
+                          <span style={{ color: "#2563eb", fontWeight: 700 }}>{n.vram_used_gb}/{n.vram_total_gb} GB</span>
+                        </div>
+                        <div style={{ height: 6, background: "#f4f4f5", borderRadius: 3, overflow: "hidden" }}>
+                          <div style={{ width: `${Math.max(4, vramPct)}%`, height: "100%", background: "#2563eb", borderRadius: 3 }} />
+                        </div>
+                      </div>
+
+                      <div style={{ fontSize: 10.5, color: "var(--text-muted)" }} className="mono">Util: {n.gpu_core_util_pct}% · {n.temp_c}°C</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Split Bottom Cards */}
@@ -1046,50 +994,150 @@ function SupportTab() {
   );
 }
 
-/* --- TAB 5: TRAINING PROGRESS (MONOTONIC PROGRESS) --- */
+/* --- TAB 5: TRAINING PROGRESS (MULTI-MODEL PROGRESS CARDS) --- */
+const INITIAL_TRAINING_MODELS = [
+  {
+    id: "m1",
+    name: "VectorOps Failure Predictor RF Regressor",
+    fileName: "vectorops_failure_predictor_rf_v2.joblib",
+    remainingTime: "8H 8M REMAINING",
+    progress: 78.4,
+    cluster: "Cluster A (RTX 4090)",
+    metric: "RMSE: 0.042",
+    rate: 0.04
+  },
+  {
+    id: "m2",
+    name: "Llama3 8B LoRA Cluster Copilot",
+    fileName: "llama3_8b_lora_copilot_finetune_v4.pt",
+    remainingTime: "4H 12M REMAINING",
+    progress: 64.2,
+    cluster: "Cluster E (NVIDIA H100)",
+    metric: "Eval Loss: 0.812",
+    rate: 0.05
+  },
+  {
+    id: "m3",
+    name: "Craftly Robot 1M Foundation Pretrain",
+    fileName: "craftly_robot_pretrain_1m_foundation_2026.craftlytrain",
+    remainingTime: "14H 30M REMAINING",
+    progress: 42.8,
+    cluster: "Cluster C (NVIDIA A100)",
+    metric: "Cross-Entropy: 1.24",
+    rate: 0.03
+  },
+  {
+    id: "m4",
+    name: "BERT Transformer Multi-Node Classifier",
+    fileName: "bert_base_multinode_text_classifier_v1.bin",
+    remainingTime: "2H 45M REMAINING",
+    progress: 89.1,
+    cluster: "Cluster B (RTX 3080)",
+    metric: "Accuracy: 94.6%",
+    rate: 0.06
+  },
+  {
+    id: "m5",
+    name: "ResNet-50 Distributed Vision Pretrain",
+    fileName: "resnet50_imagenet_distributed_fp16.pth",
+    remainingTime: "1H 15M REMAINING",
+    progress: 95.3,
+    cluster: "Cluster F (RTX 6000 Ada)",
+    metric: "Top-1 Acc: 79.2%",
+    rate: 0.02
+  },
+  {
+    id: "m6",
+    name: "YOLOv8 Edge Real-Time Inspector",
+    fileName: "yolov8x_edge_inspection_fp16.onnx",
+    remainingTime: "6H 50M REMAINING",
+    progress: 51.7,
+    cluster: "Cluster D (NVIDIA L4)",
+    metric: "mAP@50: 0.884",
+    rate: 0.04
+  }
+];
+
 function TrainingTab({ nodes }) {
-  const [progress, setProgress] = useState(74.54);
+  const [models, setModels] = useState(INITIAL_TRAINING_MODELS);
 
   // Monotonic progress advancement: strictly increases over time (never goes backward!)
   useEffect(() => {
     const timer = setInterval(() => {
-      setProgress(p => {
-        if (p >= 99.9) return 99.9;
-        return parseFloat((p + 0.04).toFixed(2));
-      });
+      setModels(prev => prev.map(m => {
+        if (m.progress >= 99.9) return { ...m, progress: 99.9 };
+        const nextProg = parseFloat((m.progress + m.rate).toFixed(2));
+        return { ...m, progress: nextProg > 99.9 ? 99.9 : nextProg };
+      }));
     }, 1500);
     return () => clearInterval(timer);
   }, []);
 
-  const onlineCount = nodes.length || 12;
-  const totalVram = nodes.reduce((a, n) => a + n.vram_total_gb, 0) || 204.0;
+  const onlineCount = nodes.length || 28;
+  const totalVram = nodes.reduce((a, n) => a + n.vram_total_gb, 0) || 1104.0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Opt-In Banner Card */}
       <div className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--text-heading)" }}>Contribute this desktop to model training</h3>
-          <div style={{ fontSize: 12.5, color: "var(--text-muted)", marginTop: 2 }}>When you opt-in, your hardware powers up VectorOps Machine Learning Model training process. You can opt out anytime.</div>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--text-heading)" }}>
+            Contribute this desktop to model training
+          </h3>
+          <div style={{ fontSize: 12.5, color: "var(--text-muted)", marginTop: 2 }}>
+            When you opt-in, your hardware powers up VectorOps Machine Learning Model training pipelines. You can opt out anytime.
+          </div>
         </div>
         <button className="btn-black">Opt In</button>
       </div>
 
-      {/* Monotonic Model Training Progress Card */}
-      <div className="card">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em" }}>MODEL TRAINING PROGRESS</span>
-          <span className="mono" style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>8H 8M REMAINING</span>
-        </div>
-        <div className="mono" style={{ fontSize: 32, fontWeight: 800, color: "var(--text-heading)", margin: "8px 0" }}>
-          {progress}%
-        </div>
-        <div style={{ height: 8, background: "#f4f4f5", borderRadius: 4, overflow: "hidden" }}>
-          <div style={{ width: `${progress}%`, height: "100%", background: "var(--pill-black)", transition: "width 0.8s ease" }} />
-        </div>
-        <div className="mono" style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 8 }}>
-          craftly_robot_pretrain_1m_foundation_20260622_v9_adamw_signed_env.craftlytrain
-        </div>
+      {/* Model Training Progress Section Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--text-heading)" }}>
+          Active Model Training Progress ({models.length} Workloads)
+        </h3>
+        <span className="badge-ready">MONOTONIC PIPELINE ACTIVE</span>
+      </div>
+
+      {/* Multiple Model Training Cards Grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))", gap: 20 }}>
+        {models.map(m => (
+          <div key={m.id} className="card" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {/* Top row: Model Name on top left, Remaining time on top right */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <h4 style={{ margin: 0, fontSize: 15.5, fontWeight: 700, color: "var(--text-heading)" }}>
+                  {m.name}
+                </h4>
+                <div className="mono" style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3 }}>
+                  {m.fileName}
+                </div>
+              </div>
+              <span className="mono" style={{ fontSize: 11, fontWeight: 700, color: "var(--text-heading)", background: "#f4f4f5", padding: "4px 10px", borderRadius: 6, border: "1px solid var(--border-card)", whiteSpace: "nowrap", marginLeft: 10 }}>
+                {m.remainingTime}
+              </span>
+            </div>
+
+            {/* Progress Segment */}
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.05em" }}>TRAINING PROGRESS</span>
+                <span className="mono" style={{ fontSize: 24, fontWeight: 800, color: "var(--text-heading)" }}>
+                  {m.progress}%
+                </span>
+              </div>
+              <div style={{ height: 8, background: "#f4f4f5", borderRadius: 4, overflow: "hidden" }}>
+                <div style={{ width: `${m.progress}%`, height: "100%", background: m.progress > 90 ? "var(--accent-emerald)" : "var(--pill-black)", transition: "width 0.8s ease" }} />
+              </div>
+            </div>
+
+            {/* Card Footer: Target Hardware & Metrics */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 10, borderTop: "1px solid var(--border-subtle)", fontSize: 11.5 }}>
+              <span style={{ color: "var(--text-muted)" }}>Target: <strong style={{ color: "var(--text-heading)" }}>{m.cluster}</strong></span>
+              <span className="mono" style={{ color: "var(--accent-emerald)", fontWeight: 700 }}>{m.metric}</span>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* 4 Summary Stats */}
@@ -1116,7 +1164,7 @@ function TrainingTab({ nodes }) {
       <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 20 }}>
         <div className="card">
           <h3 style={{ margin: "0 0 16px 0", fontSize: 15, fontWeight: 700 }}>Available Training Nodes</h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 300, overflowY: "auto" }}>
             {nodes.map(n => (
               <div key={n.node_id} style={{ background: "#fafafa", border: "1px solid var(--border-card)", borderRadius: 10, padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
@@ -1131,23 +1179,32 @@ function TrainingTab({ nodes }) {
 
         <div className="card">
           <h3 style={{ margin: "0 0 16px 0", fontSize: 15, fontWeight: 700 }}>Training Event Log</h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 300, overflowY: "auto" }}>
             <div style={{ background: "#fafafa", border: "1px solid var(--border-card)", borderRadius: 8, padding: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 700 }}>
                 <span>Running on Node A-01</span>
                 <span style={{ fontSize: 10, color: "var(--text-muted)" }}>6/23/2026</span>
               </div>
               <div className="mono" style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
-                [craftly-worker] phase=lineage_cache_lock_wait lock=[redacted_path] lock_age_seconds=264.1
+                [vectorops-rf] checkpoint saved epoch=450 loss=0.042
               </div>
             </div>
             <div style={{ background: "#fafafa", border: "1px solid var(--border-card)", borderRadius: 8, padding: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 700 }}>
-                <span>Running on Node B-03</span>
+                <span>Running on Node E-02</span>
                 <span style={{ fontSize: 10, color: "var(--text-muted)" }}>6/23/2026</span>
               </div>
               <div className="mono" style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
-                Downloading a verified aggregation input artifact.
+                [llama3-lora] phase=gradient_accumulation step=8400 eval_loss=0.812
+              </div>
+            </div>
+            <div style={{ background: "#fafafa", border: "1px solid var(--border-card)", borderRadius: 8, padding: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 700 }}>
+                <span>Running on Node C-04</span>
+                <span style={{ fontSize: 10, color: "var(--text-muted)" }}>6/23/2026</span>
+              </div>
+              <div className="mono" style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                [craftly-worker] phase=lineage_cache_lock_wait lock_age_seconds=264.1
               </div>
             </div>
           </div>
